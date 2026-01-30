@@ -1,23 +1,313 @@
-# Voxel FPS Shooter
+# 3D Voxel Shooter - Modular Game Engine
 
-A 3D voxel-based first-person shooter game built with JavaScript and a custom 3D rendering engine.
+A polished, well-structured 3D voxel-based shooter game with a modular architecture designed for easy customization and expansion.
+
+## Architecture Overview
+
+The engine is split into modular systems, each with a specific responsibility:
+
+### **physics.js** - Physics Engine
+Handles collision detection and physics simulation.
+
+**Key Classes:**
+- `PhysicsEngine` - Main physics system
+  - `update(delta)` - Update all physics bodies
+  - `checkAABBCollision(box1, box2)` - AABB collision detection
+  - `getVoxelBounds(position, size)` - Get voxel bounding box
+  - `getSphereBounds(position, radius)` - Get sphere bounding box
+  - `rayCastToVoxels(origin, direction, maxDistance, voxels)` - Raycast
+  - `rayBoxIntersection(rayOrigin, rayDir, box)` - Ray-box intersection
+
+**Usage:**
+```javascript
+const physics = new PhysicsEngine();
+physics.addBody(bodyObject);
+physics.update(deltaTime);
+```
+
+---
+
+### **world.js** - World & Voxel Management
+Manages terrain, structures, and voxel destruction with proper physics.
+
+**Key Classes:**
+- `World` - Voxel world manager
+  - `createVoxel(position, color, size, dynamic, health)` - Create voxel
+  - `removeVoxel(voxel)` - Remove voxel
+  - `damageVoxel(voxel, damage)` - Damage voxel
+  - `dropVoxel(voxel)` - Make static voxel fall (physics)
+  - `isSupported(voxel)` - Check if voxel has ground support
+  - `applyGravity()` - Apply gravity to unsupported voxels
+  - `createStructure(x, y, z, width, height, depth, color)` - Build structure
+
+**Pre-built Levels:**
+- `LEVELS.basic` - Training ground with structures
+- `LEVELS.maze` - Maze-like level
+- `LEVELS.arena` - Arena with colored structures
+
+**Usage:**
+```javascript
+const world = new World(scene, physics, "levelName");
+world.createGround(40, 40);
+world.createStructure(0, 0, 0, 3, 5, 3);
+LEVELS.basic.build(world);
+```
+
+---
+
+### **weapons.js** - Weapon System
+Extensible weapon framework for creating new weapons.
+
+**Key Classes:**
+- `Weapon` - Base weapon class
+  - `fire(origin, direction, projectiles, particles)` - Fire weapon
+  - `createProjectile()` - Override for custom behavior
+  - `getAmmoText()` - Get ammo display
+
+**Built-in Weapons:**
+- `BulletWeapon` - Standard rifle
+- `ShotgunWeapon` - Multiple projectiles with spread
+- `SniperWeapon` - High damage, slow fire rate
+- `RocketWeapon` - Explosive projectiles
+- `Projectile` - Projectile physics and collision
+
+- `WeaponManager` - Manage multiple weapons
+  - `addWeapon(weapon)` - Add weapon
+  - `switchWeapon(index)` - Switch weapon
+  - `fire(origin, direction, projectiles, particles)` - Fire current weapon
+
+**Creating Custom Weapons:**
+```javascript
+class FlamethrowerWeapon extends Weapon {
+    constructor() {
+        super("Flamethrower", {
+            fireRate: 0.05,
+            damage: 0.5,
+            projectileSpeed: 30,
+            projectileSize: 0.25,
+            projectileColor: 0xff4400
+        });
+        this.pelletsPerShot = 20;
+    }
+
+    createProjectile(origin, direction, projectiles, particles) {
+        for (let i = 0; i < this.pelletsPerShot; i++) {
+            const spreadDir = direction.clone();
+            const angle = (Math.random() - 0.5) * Math.PI / 4;
+            spreadDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+
+            projectiles.push(new Projectile(
+                origin.clone(),
+                spreadDir,
+                {
+                    speed: this.projectileSpeed,
+                    size: this.projectileSize,
+                    color: this.projectileColor,
+                    damage: this.damage,
+                    lifetime: 2,
+                    weapon: this.name
+                }
+            ));
+        }
+    }
+}
+
+weaponManager.addWeapon(new FlamethrowerWeapon());
+```
+
+---
+
+### **entities.js** - Game Entities
+Player enemies, particles, and other game entities.
+
+**Key Classes:**
+- `Enemy` - Enemy made of multiple voxels
+  - `update(delta, playerPos, particles)` - Update enemy
+  - `takeDamage(amount, particles)` - Take damage
+  - `destroy(particles)` - Destroy enemy
+  - `getDistance(playerPos)` - Distance to player
+
+- `Particle` - Visual particle effects
+  - `update(delta)` - Update particle
+  - `destroy()` - Remove particle
+
+**Usage:**
+```javascript
+const enemy = new Enemy(position, world);
+enemy.update(delta, playerPos, particles);
+```
+
+---
+
+### **main.js** - Game Loop & Logic
+Main game loop, collision detection, and game state.
+
+**Key Functions:**
+- `init()` - Initialize game
+- `animate()` - Main render loop
+- `updatePlayer(delta)` - Update player movement
+- `updateEnemies(delta)` - Update enemy spawning
+- `updateProjectiles(delta)` - Update bullets
+- `updateParticles(delta)` - Update particles
+- `checkCollisions()` - Handle collisions with proper physics
+- `shoot()` - Fire weapon
+- `startGame()` - Start game
+- `endGame()` - End game
+
+---
 
 ## Features
 
-- **Voxel-Based World**: Fully destructible environment made of voxel blocks
-- **3D FPS Gameplay**: First-person perspective with smooth camera controls
-- **Enemy AI**: Red voxel enemies that chase and attack the player
-- **Shooting Mechanics**: Click to shoot enemies and destroy voxel structures
-- **Intuitive Controls**: WASD movement, mouse look, spacebar to jump
-- **Score System**: Earn points by destroying enemies (100 pts) and structures (10 pts)
-- **Health System**: Avoid enemies or you'll take damage
-- **Beautiful UI**: Gradient menu, HUD with stats, and crosshair
+✅ **True 3D Rendering** with proper perspective and full camera freedom (look up/down)
+✅ **Voxel Physics** - Destructible voxels that fall with gravity when unsupported
+✅ **Collision Detection** - AABB and ray-based collision for all entities
+✅ **Multi-voxel Enemies** - Enemies made of individual voxels
+✅ **Extensible Weapon System** - Easy to add new weapons and projectiles
+✅ **Level System** - Pre-built levels, easy to create custom ones
+✅ **Proper Physics** - Gravity, velocity, and realistic projectile trajectories
+✅ **Particle Effects** - Impact and explosion particles
+✅ **Professional Graphics** - Shadows, lighting, fog, and materials
+✅ **Wave System** - Progressive difficulty with increasing enemy spawns
+
+---
+
+## How to Add New Weapons
+
+1. Extend the `Weapon` class:
+```javascript
+class LaserWeapon extends Weapon {
+    constructor() {
+        super("Laser", {
+            fireRate: 0.1,
+            damage: 2,
+            projectileSpeed: 100,
+            projectileSize: 0.15,
+            projectileColor: 0x00ff00,
+            projectileLife: 20
+        });
+    }
+}
+```
+
+2. Add to weapon manager in `init()`:
+```javascript
+weaponManager.addWeapon(new LaserWeapon());
+```
+
+3. Bind to key (in `setupInput()`):
+```javascript
+if (e.key === '3') {
+    weaponManager.switchWeapon(4);
+}
+```
+
+---
+
+## How to Create Custom Levels
+
+1. Add level definition to `LEVELS` in world.js:
+```javascript
+LEVELS.myLevel = {
+    name: "My Custom Level",
+    build: function(world) {
+        world.createGround(50, 50);
+        world.createStructure(5, 0, 5, 4, 3, 4, 0xff0000);
+        world.createStructure(-10, 0, 10, 3, 5, 3, 0x0000ff);
+    }
+};
+```
+
+2. Load level in `init()`:
+```javascript
+gameState.currentLevel = 'myLevel';
+LEVELS[gameState.currentLevel].build(world);
+```
+
+---
+
+## Physics System Details
+
+### Voxel Gravity
+When voxels are destroyed, adjacent voxels that lose support automatically fall:
+```javascript
+world.applyGravity();
+```
+
+### Collision Detection
+- Ray-casting for precise projectile collision
+- AABB for player-voxel collisions
+- Sphere-sphere for enemy interactions
+
+### Player Collision
+- Ground collision with proper landing
+- Side collision pushing player away from voxels
+- Ceiling collision blocking upward movement
+
+---
 
 ## Controls
 
-- **WASD** - Move around the world
-- **Mouse** - Look around (pointer lock)
+- **WASD** - Move
+- **Mouse** - Look around (up/down/left/right)
 - **Left Click** - Shoot
+- **Space** - Jump
+- **ESC** - Pause
+- **Number Keys** - Switch weapons (1-4)
+
+---
+
+## Performance Optimization
+
+- Voxels use mesh grouping for efficiency
+- Collision checks optimized with spatial hashing
+- Physics updates capped at 60fps
+- Gravity applied probabilistically
+
+---
+
+## File Structure
+
+```
+├── index.html          # Game HTML
+├── style.css           # UI styling
+├── physics.js          # Physics engine
+├── world.js            # World & voxel system
+├── weapons.js          # Weapon system
+├── entities.js         # Game entities
+├── main.js             # Game loop & logic
+└── README.md           # Documentation
+```
+
+---
+
+## Customization Examples
+
+### Increase Weapon Damage
+```javascript
+weaponManager.weapons[0].damage = 2;
+```
+
+### Change Enemy Health
+```javascript
+this.health = 10;
+this.maxHealth = 10;
+```
+
+### Adjust Player Speed
+```javascript
+const PLAYER_SPEED = 30;
+```
+
+### Modify Level Difficulty
+```javascript
+ENEMY_SPAWN_INTERVAL = 1000;
+```
+
+---
+
+## License
+
+Free to use and modify.
 - **Space** - Jump
 - **ESC** - Pause/Unpause
 

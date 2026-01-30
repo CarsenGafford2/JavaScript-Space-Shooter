@@ -3,39 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voxel FPS Shooter</title>
+    <title>3D Voxel Shooter</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="menu">
-        <h1>Voxel FPS Shooter</h1>
-        <div id="instructions">
-            <h2>Controls:</h2>
-            <ul>
-                <li><strong>WASD</strong> - Move</li>
-                <li><strong>Mouse</strong> - Look around</li>
-                <li><strong>Left Click</strong> - Shoot</li>
-                <li><strong>Space</strong> - Jump</li>
-                <li><strong>ESC</strong> - Pause</li>
-            </ul>
-            <button id="startButton">Click to Start</button>
+        <div class="menu-container">
+            <h1>VOXEL SHOOTER</h1>
+            <div id="instructions">
+                <h2>Controls:</h2>
+                <ul>
+                    <li><strong>WASD</strong> - Move</li>
+                    <li><strong>Mouse</strong> - Look up/down/around</li>
+                    <li><strong>Left Click</strong> - Fire voxel bullets</li>
+                    <li><strong>Space</strong> - Jump</li>
+                    <li><strong>ESC</strong> - Pause</li>
+                </ul>
+                <p style="margin-top: 20px; font-size: 0.9em;">Destroy the voxel enemies before they reach you!</p>
+                <button id="startButton">PLAY</button>
+            </div>
         </div>
     </div>
     <div id="hud" style="display: none;">
-        <div id="crosshair"></div>
-        <div id="stats">
-            <div id="health">Health: <span id="healthValue">100</span></div>
-            <div id="score">Score: <span id="scoreValue">0</span></div>
-            <div id="ammo">Ammo: <span id="ammoValue">∞</span></div>
+        <div id="crosshair">
+            <div class="cross-h"></div>
+            <div class="cross-v"></div>
         </div>
+        <div id="stats">
+            <div id="topStats">
+                <span id="health">❤ <span id="healthValue">100</span></span>
+                <span id="score">⭐ <span id="scoreValue">0</span></span>
+            </div>
+            <div id="bottomStats">
+                <span id="ammo">AMMO: ∞</span>
+                <span id="waveInfo">Wave <span id="waveNumber">1</span></span>
+            </div>
+        </div>
+        <div id="damageIndicator" class="damage-indicator"></div>
     </div>
     <div id="gameOver" style="display: none;">
-        <h1>Game Over!</h1>
-        <p>Final Score: <span id="finalScore">0</span></p>
-        <button id="restartButton">Restart</button>
+        <div class="gameover-container">
+            <h1>GAME OVER</h1>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <p>Wave Reached: <span id="finalWave">1</span></p>
+            <button id="restartButton">PLAY AGAIN</button>
+        </div>
     </div>
     
-    <script src="engine3d.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="physics.js"></script>
+    <script src="world.js"></script>
+    <script src="weapons.js"></script>
+    <script src="entities.js"></script>
     <script src="main.js"></script>
 </body>
 </html>
