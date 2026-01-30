@@ -9,17 +9,11 @@ const PLAYER_SPEED = 20;
 const JUMP_VELOCITY = 15;
 const PLAYER_RADIUS = 0.4;
 const GRAVITY = 40;
-const ENEMY_SPAWN_INTERVAL = 1500;
 
 // Game state
 const gameState = {
-    health: 100,
-    maxHealth: 100,
-    score: 0,
-    wave: 1,
     isPlaying: false,
     isPaused: false,
-    kills: 0,
     currentLevel: 'basic'
 };
 
@@ -40,11 +34,8 @@ const player = {
 // Engine instances
 let scene, camera, renderer, clock;
 let physics, world, weaponManager;
-let lastEnemySpawn = 0;
-let enemies = [];
 let projectiles = [];
 let particles = [];
-let waveMultiplier = 1;
 
 // Physics for voxel projectiles
 class VoxelProjectile {
@@ -82,177 +73,8 @@ class VoxelProjectile {
     }
 }
 
-// Particle effect system
-class Particle {
-    constructor(position, velocity, color, life = 0.5) {
-        this.position = position.clone();
-        this.velocity = velocity.clone();
-        this.life = life;
-        this.age = 0;
-        
-        const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-        const material = new THREE.MeshStandardMaterial({ 
-            color: color,
-            emissive: color,
-            emissiveIntensity: 0.8
-        });
-        this.mesh = new THREE.Mesh(geometry, material);
-        this.mesh.position.copy(this.position);
-        this.mesh.castShadow = true;
-        scene.add(this.mesh);
-    }
-
-    update(delta) {
-        this.age += delta;
-        this.velocity.y -= GRAVITY * delta * 0.5;
-        
-        this.position.add(this.velocity.clone().multiplyScalar(delta));
-        this.mesh.position.copy(this.position);
-        
-        const progress = this.age / this.life;
-        this.mesh.material.opacity = 1 - progress;
-        this.mesh.scale.multiplyScalar(0.95);
-        
-        return this.age < this.life;
-    }
-
-    destroy() {
-        scene.remove(this.mesh);
-        this.mesh.geometry.dispose();
-        this.mesh.material.dispose();
-    }
-}
-
-// Enemy made of multiple voxels
-class VoxelEnemy {
-    constructor(position) {
-        this.position = position.clone();
-        this.velocity = new THREE.Vector3();
-        this.rotation = new THREE.Vector3();
-        this.health = 3;
-        this.maxHealth = 3;
-        this.group = new THREE.Group();
-        this.voxels = [];
-        this.lastDamageTime = 0;
-        this.isDestroyed = false;
-        
-        // Create enemy shape from voxels (2x2x2 cube + extensions)
-        const shape = [
-            { x: 0, y: 0, z: 0 },
-            { x: 1, y: 0, z: 0 },
-            { x: 0, y: 1, z: 0 },
-            { x: 1, y: 1, z: 0 },
-            { x: 0, y: 0, z: 1 },
-            { x: 1, y: 0, z: 1 },
-            { x: 0, y: 1, z: 1 },
-            { x: 1, y: 1, z: 1 },
-            { x: 0.5, y: 2, z: 0.5 } // Eye
-        ];
-        
-        shape.forEach((offset, index) => {
-            const color = index === shape.length - 1 ? 0xff0000 : 0xdd0000;
-            const voxel = createVoxel(new THREE.Vector3(0, 0, 0), color, 0.4);
-            voxel.position.set(offset.x * VOXEL_SIZE, offset.y * VOXEL_SIZE, offset.z * VOXEL_SIZE);
-            voxel.castShadow = true;
-            voxel.receiveShadow = true;
-            
-            this.group.add(voxel);
-            this.voxels.push({
-                mesh: voxel,
-                offset: offset,
-                maxHealth: 1,
-                health: 1
-            });
-        });
-        
-        this.group.position.copy(this.position);
-        this.group.castShadow = true;
-        scene.add(this.group);
-    }
-
-    update(delta) {
-        if (this.isDestroyed) return false;
-
-        // Move towards player
-        const direction = new THREE.Vector3();
-        direction.subVectors(player.position, this.position);
-        direction.y *= 0.5;
-        direction.normalize();
-        
-        this.velocity.copy(direction).multiplyScalar(8);
-        this.position.add(this.velocity.clone().multiplyScalar(delta));
-        this.group.position.copy(this.position);
-        
-        // Gentle rotation
-        this.group.rotation.y += delta * 0.5;
-        this.group.rotation.z = Math.sin(Date.now() * 0.001) * 0.2;
-        
-        // Color based on health
-        const healthRatio = this.health / this.maxHealth;
-        this.voxels.forEach((voxel, idx) => {
-            const color = idx === this.voxels.length - 1 ? 0xff0000 : 0xdd0000;
-            const c = new THREE.Color(color);
-            if (healthRatio < 0.5) {
-                c.lerp(new THREE.Color(0x00ff00), 1 - healthRatio * 2);
-            }
-            voxel.mesh.material.color = c;
-        });
-        
-        return true;
-    }
-
-    takeDamage(amount = 1) {
-        if (Date.now() - this.lastDamageTime < 100) return;
-        
-        this.lastDamageTime = Date.now();
-        this.health -= amount;
-        
-        // Create impact particles
-        const impactPos = this.position.clone();
-        for (let i = 0; i < 5; i++) {
-            const velocity = new THREE.Vector3(
-                (Math.random() - 0.5) * 15,
-                Math.random() * 10,
-                (Math.random() - 0.5) * 15
-            );
-            particles.push(new Particle(impactPos, velocity, 0xff6b00, 0.3));
-        }
-        
-        // Flash
-        this.voxels.forEach(v => {
-            v.mesh.material.emissive.setHex(0xffff00);
-            setTimeout(() => {
-                v.mesh.material.emissive.setHex(0x000000);
-            }, 50);
-        });
-        
-        return this.health <= 0;
-    }
-
-    destroy() {
-        this.isDestroyed = true;
-        
-        // Explosion particles
-        for (let i = 0; i < 20; i++) {
-            const velocity = new THREE.Vector3(
-                (Math.random() - 0.5) * 20,
-                Math.random() * 15 + 5,
-                (Math.random() - 0.5) * 20
-            );
-            particles.push(new Particle(this.position, velocity, 0xff6b00, 0.8));
-        }
-        
-        scene.remove(this.group);
-        this.group.traverse(child => {
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) child.material.dispose();
-        });
-    }
-
-    getDistance() {
-        return this.position.distanceTo(player.position);
-    }
-}
+// Particle class is defined in entities.js
+// Enemy class removed - this is a destruction simulator!
 
 // Create a single voxel mesh
 function createVoxel(position, color, size = VOXEL_SIZE) {
@@ -372,7 +194,6 @@ function checkCollisions() {
                     particles.push(new Particle(projectile.position.clone(), particleVel, 0xff6b00, 0.4));
                 }
 
-                gameState.score += 5;
                 break;
             }
         }
@@ -381,29 +202,6 @@ function checkCollisions() {
             projectile.destroy();
             projectiles.splice(i, 1);
             continue;
-        }
-
-        // Check enemy collisions
-        for (let j = enemies.length - 1; j >= 0; j--) {
-            const enemy = enemies[j];
-            const distance = projectile.position.distanceTo(enemy.position);
-
-            if (distance < 2) {
-                const isDead = enemy.takeDamage(1);
-
-                if (isDead) {
-                    enemy.destroy();
-                    enemies.splice(j, 1);
-                    gameState.score += 100 * gameState.wave;
-                    gameState.kills++;
-                    updateWaveIfNeeded();
-                }
-
-                projectile.destroy();
-                projectiles.splice(i, 1);
-                hitSomething = true;
-                break;
-            }
         }
     }
 
@@ -444,53 +242,15 @@ function checkCollisions() {
         }
     });
 
-    if (!onGround && player.position.y <= PLAYER_HEIGHT) {
-        player.position.y = PLAYER_HEIGHT;
+    // Fallback ground check - actual ground is at y=0 (top of ground voxels)
+    if (!onGround && player.position.y <= PLAYER_RADIUS) {
+        player.position.y = PLAYER_RADIUS;
         player.velocity.y = 0;
         player.canJump = true;
     }
-
-    // Enemy-player collision (damage)
-    enemies.forEach((enemy, idx) => {
-        const distance = enemy.getDistance();
-
-        if (distance < 2) {
-            gameState.health -= 0.5; // Continuous damage
-
-            const indicator = document.getElementById('damageIndicator');
-            indicator.classList.add('active');
-            setTimeout(() => indicator.classList.remove('active'), 100);
-
-            updateHUD();
-
-            if (gameState.health <= 0) {
-                endGame();
-            }
-        }
-    });
 }
 
-function updateWaveIfNeeded() {
-    const enemiesToKillForWave = 5 + gameState.wave * 2;
-    if (gameState.kills % enemiesToKillForWave === 0) {
-        gameState.wave++;
-        waveMultiplier = 1 + (gameState.wave - 1) * 0.3;
-        updateHUD();
-    }
-}
-
-// Spawn enemy
-function spawnEnemy() {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 25;
-    const position = new THREE.Vector3(
-        Math.cos(angle) * distance,
-        VOXEL_SIZE * 2,
-        Math.sin(angle) * distance
-    );
-
-    enemies.push(new VoxelEnemy(position));
-}
+// No enemies or waves in destruction simulator!
 
 // Update player
 function updatePlayer(delta) {
@@ -535,22 +295,7 @@ function updateProjectiles(delta) {
     }
 }
 
-// Update enemies
-function updateEnemies(delta) {
-    if (!gameState.isPlaying || gameState.isPaused) return;
-
-    // Spawn new enemies
-    if (Date.now() - lastEnemySpawn > ENEMY_SPAWN_INTERVAL / waveMultiplier) {
-        spawnEnemy();
-        lastEnemySpawn = Date.now();
-    }
-
-    // Update enemies
-    for (let i = enemies.length - 1; i >= 0; i--) {
-        const enemy = enemies[i];
-        enemy.update(delta);
-    }
-}
+// No enemies in destruction simulator!
 
 // Update particles
 function updateParticles(delta) {
@@ -562,12 +307,7 @@ function updateParticles(delta) {
     }
 }
 
-// Update HUD
-function updateHUD() {
-    document.getElementById('healthValue').textContent = Math.max(0, Math.floor(gameState.health));
-    document.getElementById('scoreValue').textContent = gameState.score;
-    document.getElementById('waveNumber').textContent = gameState.wave;
-}
+// No HUD needed for destruction simulator
 
 // Event listeners
 function setupInput() {
@@ -624,7 +364,6 @@ function setupInput() {
 
     // Menu buttons
     document.getElementById('startButton').addEventListener('click', startGame);
-    document.getElementById('restartButton').addEventListener('click', restartGame);
 
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
@@ -638,27 +377,15 @@ function startGame() {
     document.getElementById('menu').style.display = 'none';
     document.getElementById('hud').style.display = 'block';
     gameState.isPlaying = true;
-    gameState.health = gameState.maxHealth;
-    gameState.score = 0;
-    gameState.wave = 1;
-    gameState.kills = 0;
-    waveMultiplier = 1;
     
     player.position.set(0, PLAYER_HEIGHT, 0);
     player.velocity.set(0, 0, 0);
     player.rotation = { x: 0, y: 0 };
     
-    enemies.length = 0;
     projectiles.length = 0;
     particles.length = 0;
     
-    updateHUD();
     renderer.domElement.requestPointerLock();
-}
-
-function restartGame() {
-    document.getElementById('gameOver').style.display = 'none';
-    startGame();
 }
 
 function togglePause() {
@@ -673,9 +400,6 @@ function togglePause() {
 function endGame() {
     gameState.isPlaying = false;
     document.getElementById('hud').style.display = 'none';
-    document.getElementById('gameOver').style.display = 'flex';
-    document.getElementById('finalScore').textContent = gameState.score;
-    document.getElementById('finalWave').textContent = gameState.wave;
     document.exitPointerLock();
 }
 
@@ -748,7 +472,6 @@ function animate() {
 
     if (gameState.isPlaying && !gameState.isPaused) {
         updatePlayer(delta);
-        updateEnemies(delta);
         updateProjectiles(delta);
         updateParticles(delta);
         physics.update(delta);
